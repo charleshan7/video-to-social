@@ -55,7 +55,7 @@
 
 ```
 content.py  ──┬── validate_content.py → 内容、素材、时间码和渠道检查
-              └── build.py --channel ...
+              └── build.py --channel ... → audit_outputs.py → 可发布交付物
                     ├── 公众号 → HTML / MD / 配图 / 封面
                     └── 小红书 → 1080×1440 卡片 / 正文 / 使用说明
 ```
@@ -87,7 +87,7 @@ SECTIONS = [
 ③ 分章    读转录切 5~8 节，按讲者分节比按议题分更好用
 ④ 选帧    "带字优先"挑图，逐帧核对
 ⑤ 写文案  填 content.py
-⑥ 出片    三个构建脚本
+⑥ 出片    build.py 条件路由 → 构建器 → 输出审计
 ```
 
 ```bash
@@ -98,7 +98,7 @@ python3 scripts/validate_content.py --channel all
 python3 scripts/build.py --channel all
 ```
 
-只生成一个渠道时使用 `--channel wechat` 或 `--channel xhs`。已有本地视频、字幕或选定帧时跳过对应前置步骤；`build.py` 会只路由到需要的构建器。
+只生成一个渠道时使用 `--channel wechat` 或 `--channel xhs`。已有本地视频、字幕或选定帧时跳过对应前置步骤；`build.py` 会只路由到需要的构建器，并在最后自动审计文件、编号和图片尺寸。
 
 ---
 
@@ -183,8 +183,15 @@ references/xiaohongshu.md 小红书卡片版式库
 scripts/common.py        路径、素材和浏览器运行时
 scripts/validate_content.py 内容与渠道规则检查
 scripts/build.py         条件路由入口
+scripts/audit_outputs.py 构建后文件、编号和尺寸审计
 scripts/                 其余取源、转录、找帧和渲染脚本
 tests/test_smoke.py      无媒体依赖的最小回归测试
+```
+
+单独审计已经生成的交付物：
+
+```bash
+python3 scripts/audit_outputs.py --channel all
 ```
 
 运行回归测试：
