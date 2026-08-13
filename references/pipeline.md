@@ -59,15 +59,13 @@ whisper-cli -m ~/.cache/whisper-cpp/ggml-large-v3-turbo-q5_0.bin \
 
 ### 幻觉自检（必做）
 
+```bash
+python3 scripts/audit_transcript.py transcript.json
+```
+
 whisper 在音乐、演示画面、长时间无人声处会疯狂重复上一句。**跑完立刻查**：
 
-```bash
-python3 -c "
-import json,collections
-segs=[s['text'].strip() for s in json.load(open('transcript.json'))['transcription']]
-for t,n in collections.Counter(segs).most_common(5):
-    if n>8: print(f'x{n}  {t[:50]}')"
-```
+脚本同时检查相邻连续重复和全局高频重复；连续重复会输出可回查的时间范围。
 
 命中就定点重转录那一段（偏移与时长单位是毫秒，`-mc 0` 关掉上下文继承，这是防重复的关键）：
 
