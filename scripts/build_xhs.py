@@ -25,26 +25,27 @@
       ...
     ]
 
-fig 填的是公众号那套图的编号（build_wechat.py 生成的 images/NN.jpg），
-两个渠道因此共用同一批配图和图注。
+fig 推荐填稳定素材 ID（例如 ``speaker-01``）。旧项目也可填公众号图
+的数字序号；两个渠道因此共用同一批配图和图注。
 """
 import subprocess, base64, pathlib, re, html, shutil
-import content as C
 
-HERE = pathlib.Path(__file__).parent
-IMG = HERE / "out" / "公众号" / "images"
-OUT = HERE / "out" / "小红书"
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+try:  # direct execution: python3 scripts/build_xhs.py
+    from common import chrome_binary, content_root, figure_catalog, load_content, resolve_card_asset, output_dir
+except ModuleNotFoundError:  # module execution: python3 -m scripts.build_xhs
+    from scripts.common import chrome_binary, content_root, figure_catalog, load_content, resolve_card_asset, output_dir
+
+
+C = load_content()
+PROJECT_ROOT = content_root(C)
+HERE = PROJECT_ROOT
+IMG = output_dir("公众号", PROJECT_ROOT) / "images"
+OUT = output_dir("小红书", PROJECT_ROOT)
+CHROME = chrome_binary()
 W, H = 1080, 1440
 B = C.BRAND
 
-# 公众号那批图的 (秒, 图注)，按编号索引
-FIGS, _i = {}, 0
-for _s in C.SECTIONS:
-    for _k, _v in _s["blocks"]:
-        if _k == "fig":
-            _i += 1
-            FIGS[_i] = _v
+FIGURES, FIGURE_NUMBERS, FIGURE_OCCURRENCES = figure_catalog(C)
 
 
 def tc(s):
@@ -58,12 +59,17 @@ def rich(s):
 
 
 def uri(n):
-    return "data:image/jpeg;base64," + base64.b64encode((IMG / f"{n:02d}.jpg").read_bytes()).decode()
+    path = IMG / f"{n:02d}.jpg"
+    if not path.is_file():
+        raise SystemExit(
+            f"找不到公众号配图：{path}\n"
+            "请先运行 python3 scripts/build_wechat.py，或使用 python3 scripts/build.py --channel xhs。"
+        )
+    return "data:image/jpeg;base64," + base64.b64encode(path.read_bytes()).decode()
 
 
-def capline(n, extra=None):
-    sec, cap = FIGS[n]
-    return f"{html.escape(extra or cap)}（原片 {tc(sec)}）"
+def capline(asset, extra=None):
+    return f"{html.escape(extra or asset['caption'])}（原片 {tc(asset['time'])}）"
 
 
 CSS = f"""
@@ -116,11 +122,12 @@ def paras(c):
 
 
 def figblock(c, top=16):
-    if not c.get("fig"):
+    if c.get("fig") is None:
         return ""
-    return (f'<img src="{uri(c["fig"])}">'
+    asset, number = resolve_card_asset(C, c["fig"], FIGURE_NUMBERS, FIGURE_OCCURRENCES)
+    return (f'<img src="{uri(number)}">'
             f'<div class="pad" style="padding-top:{top}px">'
-            f'<div class="cap">{capline(c["fig"], c.get("cap"))}</div></div>')
+            f'<div class="cap">{capline(asset, c.get("cap"))}</div></div>')
 
 
 def eyebrow(c, dark=False):
@@ -198,6 +205,8 @@ def main():
     cards = getattr(C, "XHS_CARDS", [])
     if not cards:
         raise SystemExit("content.py 里没有 XHS_CARDS")
+    if cards and cards[0].get("layout") != "hero":
+        raise SystemExit("小红书第 01 张必须使用 hero 版式")
     if len(cards) > 18:
         raise SystemExit(f"小红书最多 18 张，当前 {len(cards)} 张")
 
@@ -218,8 +227,15 @@ def main():
     if copy:
         (OUT / "正文文案.txt").write_text(copy + "\n", encoding="utf-8")
         n = len(copy.replace("\n", ""))
-        flag = "⚠️ 超出上限" if n > 1000 else "✅"
-        print(f"\n正文文案 {n} 字（上限约 1000，标签也算）{flag}")
+        flag = "⚠️ 超出上限" if n > 950 else "✅"
+        print(f"\n正文文案 {n} 字（建议 ≤950，标签也算）{flag}")
+    (OUT / "使用说明.txt").write_text(
+        "小红书发布清单\n\n"
+        "1. 按 01.png 到最后一张的顺序上传，首图必须是标题页。\n"
+        "2. 将正文文案.txt 粘贴到发布正文，检查标题栏和话题标签。\n"
+        "3. 每张图为 1080×1440；如需改文案或图片，修改根目录 content.py 后重跑。\n",
+        encoding="utf-8",
+    )
     print(f"共 {len(cards)} 张 → {OUT}")
 
 

@@ -8,11 +8,17 @@
 封面文案从 content.py 取 COVER_*，没有就退回 TITLE。
 """
 import pathlib, subprocess
-import content as C
 
-HERE = pathlib.Path(__file__).parent
-OUT = HERE / "out" / "公众号"
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+try:  # direct execution: python3 scripts/make_covers.py
+    from common import chrome_binary, content_root, load_content, output_dir
+except ModuleNotFoundError:  # module execution: python3 -m scripts.make_covers
+    from scripts.common import chrome_binary, content_root, load_content, output_dir
+
+
+C = load_content()
+HERE = content_root(C)
+OUT = output_dir("公众号", HERE)
+CHROME = chrome_binary()
 B = C.BRAND
 
 TITLE = getattr(C, "COVER_TITLE", C.TITLE)          # 可含 <em> 高亮与 <br>

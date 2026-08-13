@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# 下片 + 抽 16k 单声道音频。用法：./fetch_video.sh <URL> [输出名]
+# 下片 + 抽 16k 单声道音频。用法：./scripts/fetch_video.sh <URL> [输出名]
 set -euo pipefail
 URL="${1:?用法: fetch_video.sh <URL> [name]}"
 NAME="${2:-keynote}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 
 echo "▸ 可用清晰度"; yt-dlp -F "$URL" 2>&1 | tail -12
 echo

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Video to Social"
+  short_description: "Turn long videos into publishable social content"
+  default_prompt: "Use $video-to-social to turn this video into a WeChat article and Xiaohongshu cards."
+
+policy:
+  allow_implicit_invocation: true

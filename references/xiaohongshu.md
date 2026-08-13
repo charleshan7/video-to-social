@@ -3,7 +3,7 @@
 ## 硬约束
 
 - 图 `1080×1440`（3:4 竖版），**最多 18 张**
-- 正文约 **1000 字上限**，话题标签也算字数
+- 正文建议 **950 字以内**，话题标签也算字数，给平台发布留余量
 - **首图决定点击率**，必须是大标题卡
 - 顺序不能乱（卡片之间有叙事）
 - 标题栏与卡片上的标题是两回事，要单独填
@@ -80,7 +80,7 @@ pull quote      44~52px / 700
 HTML + 无头 Chrome 截图，比任何图形库都可控：
 
 ```bash
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+"\${VIDEO_TO_SOCIAL_CHROME:-google-chrome}" \
   --headless --disable-gpu --no-sandbox --hide-scrollbars \
   --window-size=1080,1440 --force-device-scale-factor=1 \
   --virtual-time-budget=6000 \
@@ -88,3 +88,14 @@ HTML + 无头 Chrome 截图，比任何图形库都可控：
 ```
 
 图用 base64 data URI 内联进 HTML，避免相对路径问题。
+
+推荐用素材 ID 引用图片：
+
+```python
+XHS_CARDS = [
+    dict(layout="hero", title="标题", lead="副题"),
+    dict(layout="image", fig="speaker-01", paras=["正文"]),
+]
+```
+
+数字 `fig` 仍兼容旧内容，但新增素材时可能改变序号，新的卡片应使用 `ASSETS` 中的稳定 ID。构建前运行 `python3 scripts/validate_content.py --channel xhs`；它会检查最多 18 张、第 01 张为 `hero`、素材引用和正文建议不超过 950 字。

@@ -1,5 +1,27 @@
 # 流水线细节
 
+## 0. 先判断要跑哪些环节
+
+把这条生产线当作条件路由，而不是每次从头执行：
+
+| 已有条件 | 跳过 | 继续 |
+|---|---|---|
+| 已有本地 MP4 | 下载 | 抽音频 |
+| 已有可信字幕/转录 | Whisper | 读取并核实 |
+| 已有选定帧 | 全片找帧 | 登记 `ASSETS` |
+| 只需要一个渠道 | 另一渠道构建器 | `build.py --channel ...` |
+| 只改文案/版式 | 取源和转录 | 验证后重建 |
+
+新项目的最短入口：
+
+```bash
+cp scripts/content_template.py content.py
+python3 scripts/validate_content.py --channel all
+python3 scripts/build.py --channel wechat   # 或 xhs / all
+```
+
+脚本从项目根目录加载 `content.py`，不需要设置 `PYTHONPATH`。如果内容源不在根目录，可设置 `VIDEO_TO_SOCIAL_CONTENT=/path/to/content.py`。
+
 ## ① 取源
 
 ```bash
@@ -122,12 +144,26 @@ CROPS = {287: "crop=in_w*0.368:in_h*0.345:in_w*0.010:in_h*0.238"}
 - **反常数据**：讲者说了不合常识的东西（公司名、数字）时，去官网公告找一手出处，找不到就如实转述并标注存疑
 - **不要猜**：双人同框谁左谁右，若片中没有单人角标，就不要写"左/右"
 
-## ⑥ 出片
+## ⑥ 登记素材
 
-```bash
-python3 build_wechat.py    # article.html + article.md + images/ + 图片清单.txt
-python3 make_covers.py     # 2100×900 + 1080×1080
-python3 build_xhs.py       # 01~NN.png
+新项目把素材写进根目录 `content.py` 的 `ASSETS`，用稳定 ID 在正文和卡片里引用：
+
+```python
+ASSETS = {
+    "speaker-01": {"time": 140, "caption": "人物图｜姓名与职务"},
+    "slide-01": {"time": 287, "caption": "信息图｜核心指标", "crop": "..."},
+}
 ```
 
-三个脚本都从同目录的 `content.py` 取数据。改文案只改 `content.py`，重跑即可。
+旧格式 `("fig", (秒, 图注))` 仍可用。稳定 ID 避免新增一张图后，所有小红书数字引用发生漂移。
+
+## ⑦ 出片
+
+```bash
+python3 scripts/validate_content.py --channel all
+python3 scripts/build.py --channel wechat    # article + images + covers
+python3 scripts/build.py --channel xhs       # cards; only prepares shared source images
+python3 scripts/build.py --channel all
+```
+
+三个脚本都从项目根目录的 `content.py` 取数据。改文案只改 `content.py`，重跑对应渠道即可。构建器也可以单独调用，但推荐通过 `build.py` 先验证再路由。

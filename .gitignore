@@ -11,3 +11,5 @@ transcript.json
 transcript.srt
 __pycache__/
 content.py
+_card_*.html
+_cover_*.html

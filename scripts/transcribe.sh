@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# whisper 转录 + 幻觉自检。用法：./transcribe.sh <audio.wav> [语言]
+# whisper 转录 + 幻觉自检。用法：./scripts/transcribe.sh <audio.wav> [语言]
 set -euo pipefail
 AUDIO="${1:?用法: transcribe.sh <audio.wav> [lang]}"
 LANG="${2:-en}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 MODEL="$HOME/.cache/whisper-cpp/ggml-large-v3-turbo-q5_0.bin"
 
 if [ ! -f "$MODEL" ]; then

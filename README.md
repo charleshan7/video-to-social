@@ -1,6 +1,8 @@
 # video-to-social
 
-把一场 47 分钟的演讲，变成一篇能发的公众号长文和一组能发的小红书卡片。
+![Test](https://github.com/charleshan7/video-to-social/actions/workflows/test.yml/badge.svg)
+
+把一场长演讲、访谈、课程或会议视频，变成一篇能发的公众号长文和/或一组能发的小红书卡片。
 
 这不是一个"喂链接出文章"的黑盒，而是一条**每步都可回查**的流水线：
 文章里每张配图都标着原片时间码，读者可以拿着 `22:21` 回去核对。
@@ -45,26 +47,30 @@
 | 网页排版能复用 | 公众号会把 JS 全部剥掉，交互式设计一上去就废 |
 | 一份稿子两边发 | 公众号是"读"，小红书是"先扫图再决定读不读"，结构必须重做 |
 
-这套流水线把这些坑都固化成了脚本和检查。
+这套流水线把这些坑固化成了脚本、条件路由和可判定检查。
 
 ---
 
 ## 核心设计：一份文案源
 
 ```
-content.py  ──┬── build_wechat.py  →  公众号 HTML / MD / 配图 / 封面
-              ├── build_xhs.py     →  小红书 1080×1440 卡片
-              └── make_covers.py   →  2100×900 + 1080×1080
+content.py  ──┬── validate_content.py → 内容、素材、时间码和渠道检查
+              └── build.py --channel ...
+                    ├── 公众号 → HTML / MD / 配图 / 封面
+                    └── 小红书 → 1080×1440 卡片 / 正文 / 使用说明
 ```
 
 文字、图注、时间码**只写一次**。改文案只改 `content.py`，两个渠道重跑即可，永远不会分叉。
 
-正文用 blocks 表达，精确控制图文顺序：
+素材用稳定 ID 登记，正文用 blocks 表达，精确控制图文顺序：
 
 ```python
+ASSETS = {
+  "speaker-01": {"time": 140, "caption": "人物图｜姓名、职务、一句背景"},
+}
 SECTIONS = [
   dict(no="01", tc=174, title="第一节", blocks=[
-    ("fig", (140, "人物图｜姓名、职务、一句背景")),
+    ("fig", "speaker-01"),
     ("p",   "段落。关键数字用 **12 万** 标；全场最关键的判断用 ***三星号*** 标。"),
     ("q",   ("一句值得拎出来的原话。", "讲者姓名")),
   ]),
@@ -88,10 +94,11 @@ SECTIONS = [
 ./scripts/fetch_video.sh "https://www.bilibili.com/video/BVxxxx/"
 ./scripts/transcribe.sh keynote_audio.wav en
 cp scripts/content_template.py content.py   # 填写
-python3 scripts/build_wechat.py
-python3 scripts/make_covers.py
-python3 scripts/build_xhs.py
+python3 scripts/validate_content.py --channel all
+python3 scripts/build.py --channel all
 ```
+
+只生成一个渠道时使用 `--channel wechat` 或 `--channel xhs`。已有本地视频、字幕或选定帧时跳过对应前置步骤；`build.py` 会只路由到需要的构建器。
 
 ---
 
@@ -134,12 +141,12 @@ python3 scripts/find_frame.py keynote.mp4 参考图.jpg
 
 | | 公众号 | 小红书 |
 |---|---|---|
-| 正文 | 不限，3000~4000 字合适 | **约 1000 字上限**（标签也算） |
+| 正文 | 不限，3000~4000 字合适 | **建议 ≤950 字**（标签也算，留出发布余量） |
 | 图 | 单独上传，需两张封面 | **≤18 张**，`1080×1440`，首图定点击率 |
 | 排版 | 内联样式能保留，JS 会被剥 | 信息全在图里，正文只是引流 |
 | 段落 | 15px 下每行约 21 字，"每段≤4行" = **84 字上限** | 每卡 3~6 段，靠版式换气 |
 
-`build_wechat.py` 每次构建都会逐段体检并打印结果：
+`validate_content.py` 会在渲染前检查结构、时间码和渠道限制；`build_wechat.py` 构建时还会逐段体检：
 
 ```
 段落 ≤4 行体检： 1 处超长 ⚠️
@@ -169,15 +176,26 @@ python3 scripts/find_frame.py keynote.mp4 参考图.jpg
 
 ```
 SKILL.md                 作为 Claude Code / Codex 技能使用时的入口
+agents/openai.yaml       技能列表中的显示名称和默认提示词
 references/pipeline.md   取源→转录→分章→选帧→核实 全流程细节
 references/wechat.md     公众号排版规范与限制
 references/xiaohongshu.md 小红书卡片版式库
-scripts/                 7 个脚本，见上
+scripts/common.py        路径、素材和浏览器运行时
+scripts/validate_content.py 内容与渠道规则检查
+scripts/build.py         条件路由入口
+scripts/                 其余取源、转录、找帧和渲染脚本
+tests/test_smoke.py      无媒体依赖的最小回归测试
+```
+
+运行回归测试：
+
+```bash
+python3 -m unittest discover -s tests -v
 ```
 
 ## 作为 Agent 技能使用
 
-放进技能目录即可被 Claude Code / Codex 自动发现：
+放进技能目录即可被 Claude Code / Codex 自动发现。仓库内层的 `SKILL.md` 是真正的 Skill 文件，项目根目录的 README 只是使用说明：
 
 ```bash
 git clone https://github.com/charleshan7/video-to-social.git ~/.agents/skills/video-to-social
@@ -189,7 +207,9 @@ git clone https://github.com/charleshan7/video-to-social.git ~/.agents/skills/vi
 
 ## 依赖
 
-`yt-dlp` · `ffmpeg` · [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp) · Python 3 · Chrome（无头截图）
+`yt-dlp` · `ffmpeg` · `ffprobe` · [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp) · Python 3 · Chrome/Chromium（无头截图）
+
+Chrome 路径可通过 `VIDEO_TO_SOCIAL_CHROME=/path/to/chrome` 或 `CHROME_BIN=/path/to/chrome` 指定；脚本会自动探测常见 macOS/Linux 路径。
 
 whisper 模型建议 `ggml-large-v3-turbo-q5_0`（约 547MB）。
 国内下载走 [hf-mirror](https://hf-mirror.com) 并且**必须绕开代理**：

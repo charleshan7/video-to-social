@@ -93,3 +93,10 @@ s = re.sub(r"\*\*(.+?)\*\*",     '<strong style="font-weight:600;color:#1A1A1A">
 3. 粘进公众号编辑器
 4. 检查图片是否都带过去了，没带的按 `images/` 编号顺序补传
 5. 标题栏单独填（正文里的标题只是文首标题）
+
+构建前运行 `python3 scripts/validate_content.py --channel wechat`。构建后检查：
+
+- `article.html`、`article.md` 和 `图片清单.txt` 均存在；
+- `images/` 编号连续，图注中的素材 ID 和原片时间码可回查；
+- `cover-2100x900.png` 与 `cover-1080x1080.png` 的尺寸正确；
+- 图没有被 `object-fit:cover` 裁掉姓名角标。

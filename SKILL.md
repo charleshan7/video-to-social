@@ -1,102 +1,115 @@
 ---
 name: video-to-social
-description: Use when turning a long talk, keynote, conference session, or interview video (B站/YouTube 链接或本地 MP4) into a Chinese long-form WeChat article and/or Xiaohongshu vertical cards. Triggers include 视频转图文、长视频转公众号、把视频做成图文长文、keynote 解读、演讲拆解成文章、做小红书图文卡片、视频截帧配图. Also use when regenerating or restyling an article already built with this pipeline.
+description: Use when turning a long talk, keynote, conference session, interview, webinar, or other video (B站/YouTube link or local MP4) into a Chinese WeChat long-form article, Xiaohongshu vertical cards, or both. Also use when regenerating an existing project, selecting only one output channel, validating video-to-social content, or restyling rendered outputs.
 ---
 
 # video-to-social — 长视频转公众号长文 + 小红书卡片
 
-## 核心原则
+把视频事实、时间码和图注维护在一个 `content.py`，再按渠道路由到独立的构建器。先建立稳定的素材登记和内容结构，再渲染；不要把平台排版规则、素材编号和临时经验散落在脚本里。
 
-**一份文案源，两个渠道出片。** 文字、图注、时间码都只写一次（`content.py`），公众号和小红书各自的构建脚本从它取，口径永不分叉。
+## 入口与路由
 
-**配图必须带字。** 画面里有姓名角标、幻灯片文字、终端输出、界面截图的帧才有信息量；纯人物特写只能靠图注撑，是最后的选择。
-
-**图注标原片时间码。** 这是解读类文章可信度的地基——读者能拿着 `22:21` 回原片核对。
-
-## 流程
-
-```
-① 取源      yt-dlp 下片 + ffmpeg 抽 16k 单声道音频
-② 转录      whisper.cpp → SRT/JSON（必须查幻觉，见下）
-③ 分章      读转录切 5~8 节，定每节起止时间码
-④ 选帧      按"带字优先"挑图，逐帧核对
-⑤ 写文案    填 content.py（唯一源）
-⑥ 出片      build_wechat.py / build_xhs.py / make_covers.py
-```
-
-详细步骤与参数见 [references/pipeline.md](references/pipeline.md)。
-
-## 四个必踩的坑
-
-**1. whisper 会幻觉，且专挑无人声段落。**
-转录完**必须**扫重复：连续 10 行以上雷同即为幻觉段，用 `-ot/-d/-mc 0` 定点重转录。
-实测一次丢了 2.5 分钟，而那恰好是全片信息密度最高的一段。
+从项目根目录运行：
 
 ```bash
-python3 -c "
-import json,collections
-segs=[s['text'].strip() for s in json.load(open('transcript.json'))['transcription']]
-c=collections.Counter(segs)
-for t,n in c.most_common(3):
-    if n>8: print(f'⚠️ 幻觉嫌疑 x{n}: {t[:40]}')"
+python3 scripts/validate_content.py --channel all
+python3 scripts/build.py --channel wechat  # 公众号 + 两张封面
+python3 scripts/build.py --channel xhs     # 小红书卡片；自动准备共享图片
+python3 scripts/build.py --channel all
 ```
 
-**2. 讲者姓名角标只出现几秒，按 10 秒采样必然扫漏。**
-不要靠人眼翻缩略图。用 `scripts/find_frame.py` 拿一张参考图做全片逐秒灰度比对，几十秒定位到精确时间点。
+根据输入状态选择最短路径：
 
-**3. `object-fit:cover` 会裁掉原帧的上下，可能正好切掉姓名角标。**
-人物图一律用自然高度满幅（1080×608），不要为了塞进固定高度而裁。
+- 用户给链接：运行 `scripts/fetch_video.sh`；用户已有 MP4：跳过下载。
+- 有现成字幕或转录：跳过 Whisper；没有才运行 `scripts/transcribe.sh`。
+- 只要一个渠道：只构建该渠道；小红书只准备共享源图，不生成公众号文章；修改文案或版式：跳过取源和转录。
+- 需要精确寻找姓名角标或幻灯片：使用 `scripts/find_frame.py`，再把结果登记到 `ASSETS`。
 
-**4. 公众号会剥掉 JS。**
-交互式时间轴、可折叠脑图这类在公众号里一律失效，改静态编号目录。这条决定了公众号版不能照搬网页版设计。
+详细参数按需读取：
 
-## 两个渠道的硬约束
+- 取源、转录、分章、选帧与核实：`references/pipeline.md`
+- 公众号限制和复制发布：`references/wechat.md`
+- 小红书版式和卡片节奏：`references/xiaohongshu.md`
+
+## 内容源规则
+
+复制模板并放在项目根目录：
+
+```bash
+cp scripts/content_template.py content.py
+```
+
+`ASSETS` 是素材唯一登记处。新项目用稳定 ID，不要把图片序号写进内容：
+
+```python
+ASSETS = {
+    "speaker-01": {"time": 140, "caption": "人物图｜姓名与职务"},
+    "slide-01": {"time": 258, "caption": "信息图｜核心指标", "crop": None},
+}
+
+SECTIONS = [
+    dict(no="01", tc=174, title="第一节", blocks=[
+        ("fig", "speaker-01"),
+        ("p", "段落。关键数字用 **12 万** 标；最关键的判断用 ***品牌色*** 标。"),
+        ("q", ("原话", "讲者")),
+    ]),
+]
+
+XHS_CARDS = [
+    dict(layout="hero", title="标题", lead="副题"),
+    dict(layout="image", fig="speaker-01", paras=["卡片正文"]),
+]
+```
+
+旧项目的 `("fig", (秒数, 图注))` 和小红书数字 `fig` 仍兼容；新内容不要继续扩大这两种隐式引用。
+
+内容审计必须先于渲染：
+
+```bash
+python3 scripts/validate_content.py --channel all
+```
+
+它会检查必填字段、目录与章节编号、段落长度、素材格式、时间码、图片引用、卡片数量、首图版式和小红书正文长度；存在视频时还会用 `ffprobe` 检查时间码是否越界。
+
+## 固定生产线
+
+```text
+① 识别输入       链接 / 本地视频 / 已有转录 / 目标渠道
+② 取源与转录     只执行缺失环节；转录后检查连续重复和相似幻觉
+③ 分章与核实     5~8 节；事实、人名、数据和时间码可回查
+④ 登记素材       带字优先；把时间、图注、裁剪写入 ASSETS
+⑤ 写唯一源       content.py 同时承载公众号结构和小红书结构
+⑥ 验证与路由     validate_content.py → build.py --channel ...
+⑦ 输出审计       检查尺寸、数量、文件清单、时间码和渠道交付说明
+```
+
+共享原则：配图优先选择姓名角标、数据幻灯片、终端/界面文字；人物近景是最后选择。图注必须标原片时间码。公众号使用静态 HTML/Markdown，不依赖 JavaScript；小红书信息必须在卡片图中完成表达。
+
+渠道硬约束：
 
 | | 公众号 | 小红书 |
 |---|---|---|
-| 正文 | 不限，3000~4000 字合适 | **约 1000 字上限**（标签也算） |
-| 图 | 单独上传，需两张封面 `2100×900` + `1080×1080` | **≤18 张**，`1080×1440`，首图定点击率 |
-| 排版 | 内联样式能保留，JS 会被剥 | 信息全在图里，正文只是引流 |
-| 段落 | 15px 下每行约 21 字，"每段≤4行" = **84 字上限** | 每卡 3~6 段，靠版式换气 |
-
-排版规范见 [references/wechat.md](references/wechat.md)，卡片版式库见 [references/xiaohongshu.md](references/xiaohongshu.md)。
-
-## 强调分两级
-
-```
-***文字***  品牌色加粗 —— 全文只留 5~8 处最关键的判断
-**文字**    纯黑加粗   —— 关键数字与术语首次出现，不换色
-```
-
-加粗和换色都是强调手段，同时上是双重冗余。实测一篇 96 段的稿子里有 107 处加粗 = 等于没有重点，降到 38 处才立得住。
-
-## 常见错误
-
-| 症状 | 原因 | 修法 |
-|---|---|---|
-| 卡片中间一大块空白 | 内容不够却用 `fill` 把底部元素顶到底 | 补内容，或整块垂直居中让留白平分两端 |
-| 配图看不清 | 用了远景舞台帧 | 换带字的帧；实在没有就裁出屏幕区域（`CROPS`） |
-| 图片显示不全 | `object-fit:cover` 裁了原帧 | 改自然高度满幅 |
-| 粘进公众号图片丢失 | data URI 不一定被编辑器接收 | 按 `images/` 编号顺序手动补传 |
-| 正文超小红书上限 | 忘了标签也算字数 | 控制在 950 字以内 |
+| 正文 | 3000~4000 字适合长文；单段建议 ≤84 字宽 | 正文建议 ≤950 字，标签也计入 |
+| 图 | 文章图 + `2100×900` 和 `1080×1080` 封面 | ≤18 张，`1080×1440`，第 01 张必须是 `hero` |
+| 排版 | 全内联样式；图片另附编号目录 | 图内完成信息，正文用于引流 |
 
 ## 交付物
 
+```text
+out/公众号/
+  article.html · article.md · images/ · 图片清单.txt · build-manifest.json
+  cover-2100x900.png · cover-1080x1080.png
+out/小红书/
+  01~NN.png · 正文文案.txt · 使用说明.txt
 ```
-out/公众号/  article.html（浏览器全选复制→粘贴）· article.md · images/ · 图片清单.txt · 两张封面
-out/小红书/  01~NN.png · 正文文案.txt · 使用说明.txt
-```
 
-## 脚本
+## 质量审计
 
-| 脚本 | 用途 |
-|---|---|
-| `scripts/fetch_video.sh` | 下片 + 抽音频 |
-| `scripts/transcribe.sh` | whisper 转录 + 幻觉自检 |
-| `scripts/find_frame.py` | 用参考图全片逐秒定位精确帧 |
-| `scripts/content_template.py` | 文案源模板（唯一真源） |
-| `scripts/build_wechat.py` | 公众号 HTML/MD/配图 |
-| `scripts/build_xhs.py` | 小红书竖版卡片 |
-| `scripts/make_covers.py` | 两张公众号封面 |
+把失败归类后修对应层：
 
-先 `cp -r scripts/ 项目目录/`，填好 `content.py` 再逐个跑。
+- 所有场景都失败：修共享内容模型或共享规则。
+- 只有一种渠道/版式失败：修渠道路由或 reference。
+- 用户明确时间、图注或比例被改：修参数硬锁和验证器。
+- 文件生成了但不能发布：修输出审计、尺寸、文件清单或发布说明。
+
+转录幻觉、姓名角标、裁剪、公众号复制和卡片留白等经验不在这里重复，按需读取对应 reference。每次修改后先跑语法检查和 `validate_content.py`，再用一个真实或最小视频样例完整前向测试。
