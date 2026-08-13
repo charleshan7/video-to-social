@@ -83,7 +83,7 @@ SECTIONS = [
 
 ```
 ① 取源    yt-dlp 下片 + ffmpeg 抽 16k 单声道音频
-② 转录    whisper.cpp → SRT/JSON，自动扫幻觉
+② 转录    whisper.cpp → SRT/JSON，审计连续幻觉
 ③ 分章    读转录切 5~8 节，按讲者分节比按议题分更好用
 ④ 选帧    "带字优先"挑图，逐帧核对
 ⑤ 写文案  填 content.py
@@ -184,6 +184,7 @@ scripts/common.py        路径、素材和浏览器运行时
 scripts/validate_content.py 内容与渠道规则检查
 scripts/build.py         条件路由入口
 scripts/audit_outputs.py 构建后文件、编号和尺寸审计
+scripts/audit_transcript.py 转录连续重复和全局重复审计
 scripts/                 其余取源、转录、找帧和渲染脚本
 tests/test_smoke.py      无媒体依赖的最小回归测试
 ```
