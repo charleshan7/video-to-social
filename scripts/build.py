@@ -49,6 +49,7 @@ def main() -> int:
             if args.channel == "xhs":
                 run("build_wechat.py", "--frames-only", content_path=args.content)
             run("build_xhs.py", content_path=args.content)
+        run("audit_outputs.py", *content_arg, "--channel", args.channel, content_path=args.content)
     except subprocess.CalledProcessError as exc:
         script_name = Path(exc.cmd[1]).name if exc.cmd and len(exc.cmd) > 1 else "unknown"
         print(f"构建失败：{script_name}", file=sys.stderr)
