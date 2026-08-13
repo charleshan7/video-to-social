@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "scripts" / "validate_content.py"
 AUDITOR = ROOT / "scripts" / "audit_outputs.py"
+TRANSCRIPT_AUDITOR = ROOT / "scripts" / "audit_transcript.py"
 
 
 VALID_CONTENT = textwrap.dedent(
@@ -70,6 +71,17 @@ class SmokeTests(unittest.TestCase):
             [sys.executable, str(AUDITOR), "--channel", channel],
             cwd=ROOT,
             env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def run_transcript_auditor(
+        self, transcript: Path, min_run: int = 10
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(TRANSCRIPT_AUDITOR), str(transcript), "--min-run", str(min_run)],
+            cwd=ROOT,
             text=True,
             capture_output=True,
             check=False,
@@ -191,6 +203,50 @@ class SmokeTests(unittest.TestCase):
             result = self.run_auditor(content, "xhs")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("1080×1440", result.stdout)
+
+    def test_transcript_audit_catches_adjacent_hallucination(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            transcript = Path(temp) / "transcript.json"
+            segments = [
+                {"start": index, "end": index + 1, "text": "重复句子"}
+                for index in range(4)
+            ]
+            segments += [{"start": 4, "end": 5, "text": "正常句子"}]
+            transcript.write_text(
+                json.dumps({"transcription": segments}, ensure_ascii=False), encoding="utf-8"
+            )
+            result = self.run_transcript_auditor(transcript, min_run=4)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("连续重复段", result.stdout)
+            self.assertIn("x4", result.stdout)
+
+    def test_transcript_audit_accepts_varied_segments(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            transcript = Path(temp) / "transcript.json"
+            transcript.write_text(
+                json.dumps({"segments": [{"text": f"句子 {index}"} for index in range(5)]}),
+                encoding="utf-8",
+            )
+            result = self.run_transcript_auditor(transcript)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("未发现连续重复段", result.stdout)
+
+    def test_transcript_audit_reads_whisper_timestamp_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            transcript = Path(temp) / "transcript.json"
+            segments = [
+                {
+                    "timestamps": {"from": "00:00:01,000", "to": "00:00:02,000"},
+                    "text": "重复句子",
+                }
+                for _ in range(3)
+            ]
+            transcript.write_text(
+                json.dumps({"transcription": segments}, ensure_ascii=False), encoding="utf-8"
+            )
+            result = self.run_transcript_auditor(transcript, min_run=3)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("00:01.00–00:02.00", result.stdout)
 
 
 if __name__ == "__main__":
