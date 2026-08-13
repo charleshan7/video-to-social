@@ -19,17 +19,4 @@ whisper-cli -m "$MODEL" -f "$AUDIO" -l "$LANG" -t 8 -oj -osrt -of transcript -pp
 
 echo
 echo "▸ 幻觉自检"
-python3 - <<'PY'
-import json, collections
-segs = [s['text'].strip() for s in json.load(open('transcript.json'))['transcription']]
-hits = [(t, n) for t, n in collections.Counter(segs).most_common(5) if n > 8]
-if hits:
-    print("⚠️  发现重复段落，极可能是幻觉：")
-    for t, n in hits:
-        print(f"   x{n}  {t[:56]}")
-    print("   → 定位时间范围后定点重转录：")
-    print("     whisper-cli -m <模型> -f <音频> -ot <起始毫秒> -d <时长毫秒> -mc 0 -of fix -otxt")
-else:
-    print("✅ 未发现明显重复")
-print(f"\n段数 {len(segs)} · 词数 {sum(len(s.split()) for s in segs)}")
-PY
+python3 scripts/audit_transcript.py transcript.json
