@@ -112,4 +112,4 @@ out/小红书/
 - 用户明确时间、图注或比例被改：修参数硬锁和验证器。
 - 文件生成了但不能发布：修输出审计、尺寸、文件清单或发布说明。
 
-转录幻觉、姓名角标、裁剪、公众号复制和卡片留白等经验不在这里重复，按需读取对应 reference。每次修改后先跑语法检查和 `validate_content.py`，再用一个真实或最小视频样例完整前向测试；`build.py` 会自动执行 `audit_outputs.py`。
+转录幻觉、姓名角标、裁剪、公众号复制和卡片留白等经验不在这里重复，按需读取对应 reference。转录后运行 `python3 scripts/audit_transcript.py transcript.json`；每次修改后先跑语法检查和 `validate_content.py`，再用一个真实或最小视频样例完整前向测试；`build.py` 会自动执行 `audit_outputs.py`。
