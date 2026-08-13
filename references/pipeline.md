@@ -164,6 +164,8 @@ python3 scripts/validate_content.py --channel all
 python3 scripts/build.py --channel wechat    # article + images + covers
 python3 scripts/build.py --channel xhs       # cards; only prepares shared source images
 python3 scripts/build.py --channel all
+# 已经生成过文件时，也可以只做交付物审计
+python3 scripts/audit_outputs.py --channel all
 ```
 
-三个脚本都从项目根目录的 `content.py` 取数据。改文案只改 `content.py`，重跑对应渠道即可。构建器也可以单独调用，但推荐通过 `build.py` 先验证再路由。
+这些脚本都从项目根目录的 `content.py` 取数据。改文案只改 `content.py`，重跑对应渠道即可。构建器也可以单独调用，但推荐通过 `build.py` 先验证、路由并审计；它会检查交付文件是否齐全、图片编号是否连续、PNG/JPEG 尺寸是否正确。
