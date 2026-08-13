@@ -1,0 +1,12 @@
+# 原片与音频不入库（版权素材，且体积大）
+*.mp4
+*.wav
+*.m4a
+# 抽出的视频截帧同理
+images/
+out/
+# 转录产物按需自行保留
+transcript.json
+transcript.srt
+__pycache__/
+content.py

@@ -1,0 +1,190 @@
+# video-to-social
+
+把一场 47 分钟的演讲，变成一篇能发的公众号长文和一组能发的小红书卡片。
+
+这不是一个"喂链接出文章"的黑盒，而是一条**每步都可回查**的流水线：
+文章里每张配图都标着原片时间码，读者可以拿着 `22:21` 回去核对。
+
+> 全流程用 Claude Code 跑通并反复迭代过一遍真实选题（Anthropic 的 Code with Claude 2026 开幕演讲）。
+> 仓库里是**方法与工具**，不含任何版权素材。
+
+---
+
+## 为什么需要这个
+
+把长视频转成图文，看起来是"转录 + 摘要 + 配图"三步，实际每一步都有坑：
+
+| 你以为 | 实际 |
+|---|---|
+| 转录出来就能用 | whisper 在无人声段落会疯狂重复上一句，能吞掉几分钟内容且毫无提示 |
+| 截图随便截 | 远景舞台帧在手机上什么都看不清，配图等于没配 |
+| 网页排版能复用 | 公众号会把 JS 全部剥掉，交互式设计一上去就废 |
+| 一份稿子两边发 | 公众号是"读"，小红书是"先扫图再决定读不读"，结构必须重做 |
+
+这套流水线把这些坑都固化成了脚本和检查。
+
+---
+
+## 核心设计：一份文案源
+
+```
+content.py  ──┬── build_wechat.py  →  公众号 HTML / MD / 配图 / 封面
+              ├── build_xhs.py     →  小红书 1080×1440 卡片
+              └── make_covers.py   →  2100×900 + 1080×1080
+```
+
+文字、图注、时间码**只写一次**。改文案只改 `content.py`，两个渠道重跑即可，永远不会分叉。
+
+正文用 blocks 表达，精确控制图文顺序：
+
+```python
+SECTIONS = [
+  dict(no="01", tc=174, title="第一节", blocks=[
+    ("fig", (140, "人物图｜姓名、职务、一句背景")),
+    ("p",   "段落。关键数字用 **12 万** 标；全场最关键的判断用 ***三星号*** 标。"),
+    ("q",   ("一句值得拎出来的原话。", "讲者姓名")),
+  ]),
+]
+```
+
+---
+
+## 流程
+
+```
+① 取源    yt-dlp 下片 + ffmpeg 抽 16k 单声道音频
+② 转录    whisper.cpp → SRT/JSON，自动扫幻觉
+③ 分章    读转录切 5~8 节，按讲者分节比按议题分更好用
+④ 选帧    "带字优先"挑图，逐帧核对
+⑤ 写文案  填 content.py
+⑥ 出片    三个构建脚本
+```
+
+```bash
+./scripts/fetch_video.sh "https://www.bilibili.com/video/BVxxxx/"
+./scripts/transcribe.sh keynote_audio.wav en
+cp scripts/content_template.py content.py   # 填写
+python3 scripts/build_wechat.py
+python3 scripts/make_covers.py
+python3 scripts/build_xhs.py
+```
+
+---
+
+## 四个真踩过的坑
+
+### 1. whisper 会幻觉，且专挑无人声段落
+
+一次实测里，42:36–45:00 整整 2.5 分钟被同一句话刷屏，而那恰好是全片信息密度最高的一段。
+`transcribe.sh` 跑完自动扫重复并给出重转录命令：
+
+```bash
+whisper-cli -m <模型> -f audio.wav -ot 2550000 -d 160000 -mc 0 -of fix -otxt
+#                                                        ^^^^^ 关掉上下文继承，这是防重复的关键
+```
+
+### 2. 讲者姓名角标只出现几秒，按 10 秒采样必然扫漏
+
+不要靠人眼翻缩略图。`find_frame.py` 拿一张参考图做全片逐秒灰度比对：
+
+```bash
+python3 scripts/find_frame.py keynote.mp4 参考图.jpg
+#   02:20 (140.00s)   差值   7.8   ← 命中
+```
+
+实测中有一张角标扫了两遍都漏掉，最后是靠这个脚本在 2849 秒里精确定位到的。
+
+### 3. `object-fit: cover` 会裁掉原帧上下
+
+为了把图塞进固定高度而用 cover，可能正好切掉人物的姓名角标——那恰恰是这张图唯一的信息。
+人物图一律用自然高度满幅。
+
+### 4. 公众号会剥掉 JS
+
+交互式时间轴、可折叠脑图、滚动动画在公众号里全部失效。
+网页版设计不能照搬，得改成静态编号目录。
+
+---
+
+## 两个渠道的硬约束
+
+| | 公众号 | 小红书 |
+|---|---|---|
+| 正文 | 不限，3000~4000 字合适 | **约 1000 字上限**（标签也算） |
+| 图 | 单独上传，需两张封面 | **≤18 张**，`1080×1440`，首图定点击率 |
+| 排版 | 内联样式能保留，JS 会被剥 | 信息全在图里，正文只是引流 |
+| 段落 | 15px 下每行约 21 字，"每段≤4行" = **84 字上限** | 每卡 3~6 段，靠版式换气 |
+
+`build_wechat.py` 每次构建都会逐段体检并打印结果：
+
+```
+段落 ≤4 行体检： 1 处超长 ⚠️
+   第02节 95 字：这一段是刻意写超长的测试用例，用来确认段落体检真…
+```
+
+---
+
+## 排版上的两个判断
+
+**强调分两级。** 加粗和换色都是强调手段，同时上是双重冗余。
+
+```
+***文字***   品牌色加粗 —— 全文只留 5~8 处最关键的判断
+**文字**     纯黑加粗   —— 关键数字与术语首次出现，不换色
+```
+
+实测一篇 96 段的稿子里有 107 处加粗，等于没有重点；降到 38 处才立得住。
+
+**小红书每页换一种版式。** 版式库见 [references/xiaohongshu.md](references/xiaohongshu.md)：
+首字下沉、大数字组、pull quote、满幅图、编号条目、纯文字页、收尾页。
+深底页穿插在浅底页之间，滑动时才有明暗呼吸。
+
+---
+
+## 目录
+
+```
+SKILL.md                 作为 Claude Code / Codex 技能使用时的入口
+references/pipeline.md   取源→转录→分章→选帧→核实 全流程细节
+references/wechat.md     公众号排版规范与限制
+references/xiaohongshu.md 小红书卡片版式库
+scripts/                 7 个脚本，见上
+```
+
+## 作为 Agent 技能使用
+
+放进技能目录即可被 Claude Code / Codex 自动发现：
+
+```bash
+git clone https://github.com/charleshan7/video-to-social.git ~/.agents/skills/video-to-social
+```
+
+之后直接说「把这个视频转成公众号图文」就会命中。
+
+---
+
+## 依赖
+
+`yt-dlp` · `ffmpeg` · [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp) · Python 3 · Chrome（无头截图）
+
+whisper 模型建议 `ggml-large-v3-turbo-q5_0`（约 547MB）。
+国内下载走 [hf-mirror](https://hf-mirror.com) 并且**必须绕开代理**：
+
+```bash
+curl --noproxy '*' -L -o ~/.cache/whisper-cpp/ggml-large-v3-turbo-q5_0.bin \
+  "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin"
+```
+
+## 素材版权
+
+这套工具处理的是**别人的视频**。抽出的截帧属于原作者，用于评述引用时请：
+
+- 在文末保留原片链接与版权说明
+- 图注标注原片时间码，让读者可回查
+- 不要把抽出的截帧或原片本身放进公开仓库
+
+本仓库的 `.gitignore` 已经排除了 `*.mp4` / `images/` / `out/`。
+
+## License
+
+MIT
