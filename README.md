@@ -91,7 +91,8 @@ SECTIONS = [
 ```
 
 ```bash
-./scripts/fetch_video.sh "https://www.bilibili.com/video/BVxxxx/"
+./scripts/fetch_video.sh "https://www.bilibili.com/video/BVxxxx/" keynote --subs-only
+./scripts/fetch_video.sh "https://www.bilibili.com/video/BVxxxx/"   # 定完选题再下片
 ./scripts/transcribe.sh keynote_audio.wav en
 cp scripts/content_template.py content.py   # 填写
 python3 scripts/validate_content.py --channel all
@@ -218,6 +219,10 @@ git clone https://github.com/charleshan7/video-to-social.git ~/.agents/skills/vi
 `yt-dlp` · `ffmpeg` · `ffprobe` · [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp) · Python 3 · Chrome/Chromium（无头截图）
 
 Chrome 路径可通过 `VIDEO_TO_SOCIAL_CHROME=/path/to/chrome` 或 `CHROME_BIN=/path/to/chrome` 指定；脚本会自动探测常见 macOS/Linux 路径。
+
+ffmpeg / ffprobe 同理：`VIDEO_TO_SOCIAL_FFMPEG` / `VIDEO_TO_SOCIAL_FFPROBE`。
+没装系统 ffmpeg 时，若环境里有 `imageio-ffmpeg`，脚本会自动用它自带的那份；
+`validate_content.py` 找不到 ffprobe 只降级为警告，不会中断校验。
 
 whisper 模型建议 `ggml-large-v3-turbo-q5_0`（约 547MB）。
 国内下载走 [hf-mirror](https://hf-mirror.com) 并且**必须绕开代理**：

@@ -14,6 +14,12 @@
 """
 import subprocess, sys, pathlib, tempfile
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+try:  # direct execution: python3 scripts/find_frame.py
+    from common import ffmpeg_binary
+except ModuleNotFoundError:  # module execution: python3 -m scripts.find_frame
+    from scripts.common import ffmpeg_binary
+
 # 角标常在左下角；要搜画面其它区域就改这里
 CROP = "crop=in_w*0.36:in_h*0.26:in_w*0.04:in_h*0.72,scale=64:32"
 
@@ -22,7 +28,7 @@ def gray_bytes(src, pre_args=(), vf_extra=""):
     """把 src 按 CROP 裁剪缩放成灰度原始字节流。"""
     tmp = tempfile.NamedTemporaryFile(suffix=".raw", delete=False).name
     vf = f"{vf_extra}{CROP},format=gray"
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *pre_args, "-i", str(src),
+    subprocess.run([ffmpeg_binary(), "-v", "error", "-y", *pre_args, "-i", str(src),
                     "-vf", vf, "-f", "rawvideo", tmp], check=True)
     data = pathlib.Path(tmp).read_bytes()
     pathlib.Path(tmp).unlink()

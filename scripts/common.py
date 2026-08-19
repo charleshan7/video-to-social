@@ -74,6 +74,51 @@ def chrome_binary() -> str:
     )
 
 
+def find_media_binary(name: str) -> str | None:
+    """Locate ffmpeg/ffprobe, or return ``None``.  Never raises.
+
+    ``imageio-ffmpeg`` ships a bundled ffmpeg build, so a project installed
+    from requirements works even when the host has no system ffmpeg.
+    Callers that can degrade gracefully (``validate_content``) use this;
+    callers that cannot use :func:`ffmpeg_binary` / :func:`ffprobe_binary`.
+    """
+    configured = os.environ.get(f"VIDEO_TO_SOCIAL_{name.upper()}")
+    if configured:
+        return configured if Path(configured).is_file() else shutil.which(configured)
+
+    found = shutil.which(name)
+    if found:
+        return found
+
+    if name == "ffmpeg":
+        try:
+            import imageio_ffmpeg
+        except ImportError:
+            return None
+        return imageio_ffmpeg.get_ffmpeg_exe()
+
+    return None
+
+
+def _media_binary(name: str) -> str:
+    found = find_media_binary(name)
+    if found:
+        return found
+    raise SystemExit(
+        f"找不到 {name}。请安装 ffmpeg（macOS: brew install ffmpeg），"
+        f"或 pip install imageio-ffmpeg，"
+        f"或设置 VIDEO_TO_SOCIAL_{name.upper()}=/path/to/{name}。"
+    )
+
+
+def ffmpeg_binary() -> str:
+    return _media_binary("ffmpeg")
+
+
+def ffprobe_binary() -> str:
+    return _media_binary("ffprobe")
+
+
 def _legacy_asset_id(seconds: float, caption: str) -> str:
     digest = hashlib.sha1(caption.encode("utf-8")).hexdigest()[:10]
     return f"legacy-{seconds:g}-{digest}"

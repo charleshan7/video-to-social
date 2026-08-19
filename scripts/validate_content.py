@@ -17,9 +17,9 @@ import sys
 from collections import Counter
 
 try:  # direct execution: python3 scripts/validate_content.py
-    from common import content_root, figure_catalog, load_content, normalize_asset, resolve_card_asset
+    from common import content_root, figure_catalog, find_media_binary, load_content, normalize_asset, resolve_card_asset
 except ModuleNotFoundError:  # module execution: python3 -m scripts.validate_content
-    from scripts.common import content_root, figure_catalog, load_content, normalize_asset, resolve_card_asset
+    from scripts.common import content_root, figure_catalog, find_media_binary, load_content, normalize_asset, resolve_card_asset
 
 
 MAX_WECHAT_CHARS = 84
@@ -37,10 +37,13 @@ def dlen(text: str) -> int:
 def video_duration(path: pathlib.Path) -> float | None:
     if not path.is_file():
         return None
+    probe = find_media_binary("ffprobe")
+    if probe is None:
+        return None
     try:
         result = subprocess.run(
             [
-                "ffprobe",
+                probe,
                 "-v",
                 "error",
                 "-show_entries",

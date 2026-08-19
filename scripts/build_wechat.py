@@ -19,9 +19,9 @@ import shutil
 import subprocess
 
 try:  # direct execution: python3 scripts/build_wechat.py
-    from common import content_root, load_content, normalize_asset, output_dir
+    from common import content_root, ffmpeg_binary, load_content, normalize_asset, output_dir
 except ModuleNotFoundError:  # module execution: python3 -m scripts.build_wechat
-    from scripts.common import content_root, load_content, normalize_asset, output_dir
+    from scripts.common import content_root, ffmpeg_binary, load_content, normalize_asset, output_dir
 
 
 C = load_content()
@@ -102,7 +102,7 @@ def grab(asset: dict, dest: pathlib.Path) -> None:
     vf = (crop + "," if crop else "") + f"scale={WIDTH}:-2:flags=lanczos"
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_binary(),
             "-v",
             "error",
             "-y",
