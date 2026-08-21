@@ -24,12 +24,15 @@ python3 scripts/build.py --channel wechat   # 或 xhs / all
 
 ## ① 取源
 
+**完整视频必须直接下载可获得的最高质量源**，不得默认限制到 1080p，不得使用预览片段或只含视频流的 DASH 文件。固定使用：
+
 ```bash
-yt-dlp -F "URL"                       # 先看清晰度
-yt-dlp -f "30080+30280/bestvideo+bestaudio/best" --merge-output-format mp4 \
-       -o "keynote.%(ext)s" "URL"
-ffmpeg -v error -y -i keynote.mp4 -ar 16000 -ac 1 -c:a pcm_s16le audio.wav
+python3 scripts/download_source.py "URL" --out-dir . --basename keynote
+# 等价底层选择器：bestvideo*+bestaudio/best
+ffmpeg -v error -y -i keynote.mkv -ar 16000 -ac 1 -c:a pcm_s16le keynote_audio.wav
 ```
+
+脚本会合并最高质量视频与音频，并写 `source_download.json`，记录选择器、实际格式、分辨率、帧率、码率、时长、源版本、文件大小和 SHA-256。`validate_content.py` 会把该清单作为硬门禁；无法取得最高质量源时必须停下说明，不得静默降级。
 
 **先查有没有现成字幕**，有就省掉整个转录环节：
 
@@ -37,8 +40,7 @@ ffmpeg -v error -y -i keynote.mp4 -ar 16000 -ac 1 -c:a pcm_s16le audio.wav
 yt-dlp --list-subs "URL"
 ```
 
-B 站搬运版和 YouTube 原版通常内容一致；B 站往往 1080p 免登录直下，反而更省事。
-两边都没字幕时才转录。
+不同平台可能暴露不同清晰度和字幕版本；只有在下载清单和字幕轨属于同一源版本时，才能继续转录与选帧。
 
 ## ② 转录
 

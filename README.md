@@ -5,7 +5,7 @@
 把一场长演讲、访谈、课程或会议视频，变成一篇能发的公众号长文和/或一组能发的小红书卡片。
 
 这不是一个"喂链接出文章"的黑盒，而是一条**每步都可回查**的流水线：
-文章里每张配图都标着原片时间码，读者可以拿着 `22:21` 回去核对。
+文章里每张配图都标着原片时间码，读者可以拿着 `22:21` 回去核对。完整生产必须先下载可获得的最高质量直接源，并把视频源和头图主体证据纳入验证。
 
 > 全流程用 Claude Code 跑通并反复迭代过一遍真实选题（Anthropic 的 Code with Claude 2026 开幕演讲）。
 > 仓库里是**方法与工具**：不含原片，也不含全分辨率截帧；
@@ -82,7 +82,7 @@ SECTIONS = [
 ## 流程
 
 ```
-① 取源    yt-dlp 下片 + ffmpeg 抽 16k 单声道音频
+① 取源    bestvideo*+bestaudio/best 最高质量直连 + source_download.json + ffmpeg 抽音频
 ② 转录    whisper.cpp → SRT/JSON，审计连续幻觉
 ③ 分章    读转录切 5~8 节，按讲者分节比按议题分更好用
 ④ 选帧    "带字优先"挑图，逐帧核对
@@ -147,7 +147,7 @@ python3 scripts/find_frame.py keynote.mp4 参考图.jpg
 | 排版 | 内联样式能保留，JS 会被剥 | 信息全在图里，正文只是引流 |
 | 段落 | 15px 下每行约 21 字，"每段≤4行" = **84 字上限** | 每卡 3~6 段，靠版式换气 |
 
-`validate_content.py` 会在渲染前检查结构、时间码和渠道限制；`build_wechat.py` 构建时还会逐段体检：
+`validate_content.py` 会在渲染前检查结构、时间码、渠道限制、最高质量源下载清单和头图主体；`build_wechat.py` 构建时还会逐段体检：
 
 ```
 段落 ≤4 行体检： 1 处超长 ⚠️
@@ -177,12 +177,13 @@ python3 scripts/find_frame.py keynote.mp4 参考图.jpg
 
 ```
 SKILL.md                 作为 Claude Code / Codex 技能使用时的入口
+scripts/download_source.py 选择并审计可获得的最高质量直接视频源
 agents/openai.yaml       技能列表中的显示名称和默认提示词
 references/pipeline.md   取源→转录→分章→选帧→核实 全流程细节
 references/wechat.md     公众号排版规范与限制
 references/xiaohongshu.md 小红书卡片版式库
 scripts/common.py        路径、素材和浏览器运行时
-scripts/validate_content.py 内容与渠道规则检查
+scripts/validate_content.py 内容、渠道、下载源和头图主体规则检查
 scripts/build.py         条件路由入口
 scripts/audit_outputs.py 构建后文件、编号和尺寸审计
 scripts/audit_transcript.py 转录连续重复和全局重复审计
@@ -210,7 +211,7 @@ python3 -m unittest discover -s tests -v
 git clone https://github.com/charleshan7/video-to-social.git ~/.agents/skills/video-to-social
 ```
 
-之后直接说「把这个视频转成公众号图文」就会命中。
+之后直接说「把这个视频转成公众号图文」就会命中。头图主体必须在 `content.py` 的 `HERO_SUBJECT` 中标为 `interviewer` 或 `speaker`，并附至少 8 个候选帧。
 
 ---
 

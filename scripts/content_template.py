@@ -15,6 +15,31 @@ TITLE = "《在这里写标题》"
 SOURCE_LABEL = "原视频"
 SOURCE_URL = "https://..."
 SOURCE_NOTE = "《原标题》· 日期 · 地点 · 时长"
+# 由 scripts/fetch_video.sh 或 scripts/download_source.py 生成；不得省略。
+SOURCE_DOWNLOAD_MANIFEST = "source_download.json"
+
+# 头图主体必须是采访人或演讲者；同一身份可服务公众号人物图和小红书首图。
+HERO_SUBJECT = {
+    "name": "采访人或演讲者姓名",
+    "role": "interviewer",  # 只能是 interviewer 或 speaker
+    "asset_id": "speaker-01",
+    "source_url": SOURCE_URL,
+    "source_quote": "页面/节目资料中确认身份的原文",
+    "confidence": "high",
+    "hero_time": 140,
+    "candidate_count": 8,
+    # 同主题宽窗口至少 8 帧；只允许一帧 selected=True。
+    "candidates": [
+        {"time": 132, "selected": False, "note": "完整头部/双眼状态"},
+        {"time": 134, "selected": False, "note": "完整头部/双眼状态"},
+        {"time": 136, "selected": False, "note": "完整头部/双眼状态"},
+        {"time": 138, "selected": False, "note": "完整头部/双眼状态"},
+        {"time": 140, "selected": True, "note": "最终头图候选"},
+        {"time": 142, "selected": False, "note": "完整头部/双眼状态"},
+        {"time": 144, "selected": False, "note": "完整头部/双眼状态"},
+        {"time": 146, "selected": False, "note": "完整头部/双眼状态"},
+    ],
+}
 
 # ── 素材登记：稳定 ID 是唯一推荐写法 ────────────────────────
 # time 使用原片秒数；caption 是文章图注；crop 可选，按素材覆盖裁剪。

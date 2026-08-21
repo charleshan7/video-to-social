@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 探测 / 下字幕 / 下片 + 抽 16k 单声道音频。
+# 探测 / 下字幕 / 最高质量下片 + 抽 16k 单声道音频。
 # 用法：./scripts/fetch_video.sh <URL> [输出名] [--subs-only]
+# 完整下载固定走 bestvideo*+bestaudio/best，并写 source_download.json。
 #
 # 先跑 --subs-only：字幕只有几十 KB，够把选题和分章都定完；
 # 长视频 1080p 常常 400MB+，是整条流水线最慢的一环，选句阶段用不上。
@@ -26,10 +27,12 @@ if [ -n "$SUBS_ONLY" ]; then
   exit 0
 fi
 
-echo "▸ 下载"
-yt-dlp -f "bestvideo[height<=1080]+bestaudio/best" --merge-output-format mp4 \
-       -o "${NAME}.%(ext)s" "$URL"
+echo "▸ 下载可获得的最高质量直接源"
+python3 scripts/download_source.py "$URL" --out-dir "$ROOT" --basename "$NAME"
+MEDIA="$(find "$ROOT" -maxdepth 1 -type f -name "${NAME}.*" -print | grep -E '\\.(mkv|mp4|webm|mov)$' | head -1 || true)"
+[ -n "$MEDIA" ] || { echo "未找到合并后的视频文件，停止。" >&2; exit 1; }
+echo "▸ 已选择 $MEDIA"
 echo "▸ 抽音频"
-ffmpeg -v error -y -i "${NAME}.mp4" -ar 16000 -ac 1 -c:a pcm_s16le "${NAME%.*}_audio.wav"
-ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "${NAME}.mp4" \
-  | awk '{printf "▸ 时长 %d 分 %d 秒\n", $1/60, $1%60}'
+ffmpeg -v error -y -i "$MEDIA" -ar 16000 -ac 1 -c:a pcm_s16le "${NAME}_audio.wav"
+ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$MEDIA" \
+  | awk '{printf "▸ 时长 %d 分 %d 秒\\n", $1/60, $1%60}'

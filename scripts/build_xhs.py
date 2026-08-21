@@ -103,8 +103,9 @@ CSS = f"""
   .pq{{font-size:48px;line-height:1.45;font-weight:700;color:#111;letter-spacing:-.01em}}
   .pq em{{font-style:normal;color:{B}}}
   .pqby{{font-size:22px;letter-spacing:.14em;color:#A5A5A5;font-weight:300}}
-  /* 图一律满幅自然高度；别用 object-fit:cover 裁固定高度，会切掉姓名角标 */
+  /* 普通图保留自然高度；hero 图使用已审计的采访人/演讲者主体 */
   img{{display:block;width:100%}}
+  .hero-img{{height:620px;object-fit:cover;object-position:center center}}
   .cap{{font-size:19px;line-height:1.6;color:#A5A5A5;font-weight:300;letter-spacing:.02em}}
   .items{{margin-top:6px}}
   .item{{display:flex;gap:24px;padding:24px 0;border-top:1px solid #DAD4CB}}
@@ -150,8 +151,16 @@ def quoteblock(c):
 def render(c):
     L = c["layout"]
     if L == "hero":
-        return (f'<div class="fill"></div><div class="pad">'
-                f'<h1>{c["title"]}</h1><div class="lead">{c.get("lead","")}</div></div>'
+        hero = getattr(C, "HERO_SUBJECT", {}) or {}
+        fig = c.get("fig") or hero.get("asset_id")
+        if fig is None:
+            raise SystemExit("hero 卡片必须使用 HERO_SUBJECT.asset_id 指定的采访人或演讲者素材")
+        asset, number = resolve_card_asset(C, fig, FIGURE_NUMBERS, FIGURE_OCCURRENCES)
+        return (f'<img class="hero-img" src="{uri(number)}" alt="{html.escape(hero.get("name", "hero subject"))}">'
+                f'<div class="pad" style="padding-top:42px"><h1>{c["title"]}</h1>'
+                f'<div class="lead">{c.get("lead","")}</div>'
+                f'<div class="cap" style="margin-top:20px">{html.escape(hero.get("name", ""))} · '
+                f'{html.escape(hero.get("role", ""))} · 原片 {tc(hero.get("hero_time", asset["time"]))}</div></div>'
                 f'<div class="fill" style="flex:.7"></div>')
     if L == "dropcap":
         ps = c.get("paras", [])

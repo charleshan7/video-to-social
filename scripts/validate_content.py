@@ -9,6 +9,8 @@ video is present, it also checks every referenced timecode against duration.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import math
 import pathlib
 import re
@@ -26,6 +28,74 @@ MAX_WECHAT_CHARS = 84
 MAX_XHS_COPY_CHARS = 950
 MAX_XHS_CARDS = 18
 ALLOWED_LAYOUTS = {"hero", "dropcap", "stats", "quote", "image", "items", "text", "ending"}
+ALLOWED_HERO_ROLES = {"interviewer", "speaker"}
+BEST_FORMAT_SELECTOR = "bestvideo*+bestaudio/best"
+
+
+def file_sha256(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def check_source_download(C, root: pathlib.Path, video: pathlib.Path, errors: list[str], warnings: list[str]) -> None:
+    if not video.is_file():
+        return
+    manifest_value = getattr(C, "SOURCE_DOWNLOAD_MANIFEST", "source_download.json")
+    manifest_path = pathlib.Path(str(manifest_value))
+    manifest_path = manifest_path if manifest_path.is_absolute() else root / manifest_path
+    if not manifest_path.is_file():
+        errors.append(f"缺少最高质量源下载清单：{manifest_path}")
+        return
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        errors.append(f"source_download.json 无法读取：{exc}")
+        return
+    if data.get("download_mode") != "direct":
+        errors.append("视频源必须是 direct 直接下载，不得使用预览或截图")
+    if data.get("format_selector") != BEST_FORMAT_SELECTOR:
+        errors.append(f"下载清单必须记录选择器：{BEST_FORMAT_SELECTOR}")
+    if data.get("quality_rank") != "best_available" or data.get("is_best_available") is not True:
+        errors.append("视频源必须声明为可获得的最高质量")
+    media_value = data.get("media_path", "")
+    media_path = pathlib.Path(str(media_value))
+    media_path = media_path if media_path.is_absolute() else root / media_path
+    if media_path.resolve() != video.resolve():
+        errors.append("source_download.json 的 media_path 与 VIDEO 不一致")
+    if not media_path.is_file():
+        errors.append(f"下载清单中的媒体文件不存在：{media_path}")
+    elif data.get("file_sha256") != file_sha256(media_path):
+        errors.append("视频文件 SHA-256 与 source_download.json 不一致")
+    if not data.get("video_streams") or not data.get("audio_streams"):
+        errors.append("下载清单必须同时记录 video_streams 和 audio_streams")
+
+
+def check_hero_subject(C, assets: dict, errors: list[str]) -> None:
+    hero = getattr(C, "HERO_SUBJECT", None)
+    if not isinstance(hero, dict):
+        errors.append("缺少 HERO_SUBJECT：头图主体必须是采访人或演讲者")
+        return
+    for field in ("name", "role", "asset_id", "source_url", "source_quote", "confidence", "hero_time", "candidate_count"):
+        if not str(hero.get(field, "")).strip() and field not in {"hero_time", "candidate_count"}:
+            errors.append(f"HERO_SUBJECT 缺少 {field}")
+    if hero.get("role") not in ALLOWED_HERO_ROLES:
+        errors.append("HERO_SUBJECT.role 只能是 interviewer 或 speaker")
+    try:
+        if int(hero.get("candidate_count", 0)) < 8:
+            errors.append("HERO_SUBJECT.candidate_count 至少为 8")
+    except (TypeError, ValueError):
+        errors.append("HERO_SUBJECT.candidate_count 必须是数字")
+    candidates = hero.get("candidates", [])
+    if not isinstance(candidates, list) or len(candidates) < 8:
+        errors.append("HERO_SUBJECT.candidates 至少需要 8 个宽窗口候选帧")
+    elif sum(1 for item in candidates if isinstance(item, dict) and item.get("selected") is True) != 1:
+        errors.append("HERO_SUBJECT.candidates 必须恰好有一帧 selected=True")
+    asset_id = hero.get("asset_id")
+    if asset_id not in assets:
+        errors.append(f"HERO_SUBJECT.asset_id 不存在于 ASSETS：{asset_id}")
 
 
 def dlen(text: str) -> int:
@@ -87,6 +157,7 @@ def check(content_path: str | None = None, channel: str = "all") -> list[str]:
     duration = video_duration(video)
     if duration is None:
         warnings.append(f"未检查视频时长（文件不存在或 ffprobe 不可用）：{video}")
+    check_source_download(C, root, video, errors, warnings)
 
     if not C.SECTIONS:
         errors.append("SECTIONS 不能为空")
@@ -181,6 +252,7 @@ def check(content_path: str | None = None, channel: str = "all") -> list[str]:
     if not isinstance(assets, dict):
         errors.append("ASSETS 必须是 dict")
     else:
+        check_hero_subject(C, assets, errors)
         for asset_id, asset in assets.items():
             if not isinstance(asset_id, str) or not asset_id.strip():
                 errors.append("ASSETS 的 ID 必须是非空字符串")

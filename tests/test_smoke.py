@@ -29,6 +29,16 @@ VALID_CONTENT = textwrap.dedent(
     SOURCE_LABEL = "原视频"
     SOURCE_URL = "https://example.com/video"
     SOURCE_NOTE = "测试来源"
+    SOURCE_DOWNLOAD_MANIFEST = "source_download.json"
+    HERO_SUBJECT = {
+        "name": "测试演讲者", "role": "speaker", "asset_id": "speaker-01",
+        "source_url": SOURCE_URL, "source_quote": "测试身份来源", "confidence": "high",
+        "hero_time": 12, "candidate_count": 8,
+        "candidates": [
+            {"time": 5 + index, "selected": index == 7, "note": "测试候选"}
+            for index in range(8)
+        ],
+    }
     ASSETS = {"speaker-01": {"time": 12, "caption": "人物图"}}
     CROPS = {}
     LEDE = ["测试导语。"]
@@ -169,7 +179,7 @@ class SmokeTests(unittest.TestCase):
             content = Path(temp) / "content.py"
             legacy = VALID_CONTENT.replace(
                 'ASSETS = {"speaker-01": {"time": 12, "caption": "人物图"}}',
-                "ASSETS = {}",
+                'ASSETS = {"speaker-01": {"time": 12, "caption": "人物图"}}',
             ).replace('("fig", "speaker-01")', '("fig", (12, "人物图"))')
             legacy = legacy.replace('fig="speaker-01"', "fig=1")
             content.write_text(legacy, encoding="utf-8")
